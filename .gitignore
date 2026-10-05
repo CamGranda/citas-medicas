@@ -1,0 +1,21 @@
+# Secretos reales (el .env del proyecto solo tiene valores de ejemplo y SI se versiona)
+.env.local
+.env.*.local
+.env.production
+*.pem
+*.key
+
+# Java / Maven
+backend/target/
+*.class
+*.jar
+
+# IDEs y SO
+.idea/
+.vscode/
+*.iml
+.DS_Store
+
+# Docker / datos locales
+postgres-data/
+*.log

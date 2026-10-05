@@ -1,0 +1,5 @@
+docs/
+api/
+.git/
+.env
+*.md

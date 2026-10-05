@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sistema de citas médicas</title>
+<style>
+:root{--bg:#edf3f5;--ink:#12262e;--mute:#566b73;--line:#cddadf;--card:#fff;--ok:#23795a;--warn:#b9780f;--bad:#c23a30;--acc:#0b6f78;--blue:#2f6fb0;--grey:#6b7280}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+header,main,footer{max-width:1100px;margin:0 auto;padding:0 20px}
+header{padding-top:28px}
+h1{font-size:clamp(1.5rem,3.2vw,2.2rem);line-height:1.15;margin:0 0 8px;letter-spacing:-.01em}
+h2{font-size:1.1rem;margin:20px 0 8px}h3{font-size:1rem;margin:16px 0 4px}h3 small{color:var(--mute);font-weight:400}
+.sub{color:var(--mute);max-width:68ch;margin:0 0 16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);padding:12px 16px}
+.kpi b{display:block;font-size:1.7rem;line-height:1.15}.kpi span{color:var(--mute);font-size:.86rem}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+.wrap{background:var(--card);border:1px solid var(--line);overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:720px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:.9rem}
+th{font-weight:600;color:var(--mute);font-size:.82rem}tr:last-child td{border-bottom:0}
+.empty{padding:14px;color:var(--mute)}
+.tag{display:inline-block;padding:2px 8px;font-size:.8rem;font-weight:600;color:#fff}
+.RESERVADA,.PENDIENTE{background:var(--blue)}.CONFIRMADA,.ASISTIO,.ENTREGADO{background:var(--ok)}.CANCELADA,.CANCELADO{background:var(--grey)}.AUSENTE,.FALLIDO{background:var(--bad)}
+button{font:inherit;font-size:.88rem;padding:6px 12px;border:1px solid var(--ink);background:var(--ink);color:#fff;cursor:pointer}
+button.sec{background:#fff;color:var(--ink)}button.sm{padding:3px 9px;font-size:.82rem;margin:1px}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.slot{background:#fff;color:var(--ink);border:1px solid var(--acc);padding:5px 10px;margin:2px;font-size:.85rem}
+.slot.on{background:var(--acc);color:#fff}
+.slot:disabled{color:#9aa8ad;border-color:var(--line);background:#f3f6f7;text-decoration:line-through;cursor:not-allowed}
+.dia{padding:6px 0;border-bottom:1px solid var(--line)}.dia b{display:inline-block;min-width:112px;font-size:.88rem}
+form,.box{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;background:var(--card);border:1px solid var(--line);padding:12px;margin-bottom:10px}
+label{display:flex;flex-direction:column;gap:2px;font-size:.8rem;color:var(--mute)}
+label.in{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:.92rem}
+input,select{font:inherit;font-size:.92rem;padding:6px 8px;border:1px solid var(--line);background:#fff;color:var(--ink);min-width:0}
+.log{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);max-height:340px;overflow:auto}
+.log li{padding:7px 12px;border-bottom:1px solid var(--line);font-size:.87rem}.log small{color:var(--mute);display:block}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.note{background:#fff;border:1px solid var(--line);padding:10px 12px;font-size:.88rem;color:var(--mute);margin-bottom:12px}
+.msg{padding:10px 12px;background:#fff;border-left:4px solid var(--acc);margin:10px 0;font-weight:500}
+.pick{border-left:4px solid var(--acc)}
+footer{padding:12px 20px 40px;color:var(--mute);font-size:.86rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Sistema de citas médicas</h1>
+  <p class="sub">Busca disponibilidad, reserva, cancela y envía recordatorios. Cada turno solo puede tener una cita, y cada acción queda registrada. Cambia de rol para ver qué puede hacer cada persona.</p>
+  <div class="box">
+    <label>Rol<select id="rol" onchange="cambiarRol(this.value)">
+      <option value="RECEPCION">Recepción</option><option value="PACIENTE">Paciente</option>
+      <option value="PROFESIONAL">Profesional de salud</option><option value="ADMIN">Administrador</option></select></label>
+    <label id="usrL" hidden>Usuario<select id="usr" onchange="S.user=this.value;commit()"></select></label>
+    <label>Hora del sistema (simulada)<b id="reloj" style="color:var(--ink);font-size:.95rem"></b></label>
+    <button class="sec" onclick="avanzar(30)">+30 min</button><button class="sec" onclick="avanzar(360)">+6 h</button><button class="sec" onclick="avanzar(1440)">+1 día</button>
+  </div>
+  <div class="kpis" id="kp" aria-live="polite"></div>
+  <div class="tabs" role="tablist">
+    <button id="t-bus" role="tab" onclick="tab('bus')">Buscar y reservar</button>
+    <button id="t-cit" role="tab" class="sec" onclick="tab('cit')">Citas</button>
+    <button id="t-rec" role="tab" class="sec" onclick="tab('rec')">Recordatorios</button>
+    <button id="t-pac" role="tab" class="sec" onclick="tab('pac')">Pacientes</button>
+    <button id="t-pro" role="tab" class="sec" onclick="tab('pro')">Profesionales</button>
+    <button id="t-aud" role="tab" class="sec" onclick="tab('aud')">Métricas y auditoría</button>
+  </div>
+</header>
+<main>
+<section id="s-bus">
+  <div class="msg" id="repro" hidden></div>
+  <div class="box">
+    <label>Especialidad<select id="fEsp" onchange="iniBusq();render()"></select></label>
+    <label>Profesional<select id="fProf" onchange="iniBusq();render()"></select></label>
+    <label>Buscar en los próximos<select id="fDias" onchange="iniBusq();render()"><option value="3">3 días</option><option value="7" selected>7 días</option><option value="14">14 días</option></select></label>
+    <button class="sec" onclick="primero()">Elegir el primer turno libre</button>
+  </div>
+  <div class="msg" id="msg" hidden></div>
+  <div class="box pick" id="rv" hidden>
+    <div id="rvT" style="flex-basis:100%;font-weight:600"></div>
+    <label id="pacL">Paciente<select id="pacSel"></select></label>
+    <label>Tipo de consulta<select id="tipo"><option>Primera consulta</option><option>Control</option><option>Procedimiento menor</option></select></label>
+    <button onclick="reservarUI()" id="btnRes">Reservar</button>
+    <button class="sec" onclick="simular2()" id="btnSim">Simular dos reservas simultáneas del mismo turno</button>
+  </div>
+  <div id="slots"></div>
+  <div class="note">Los turnos tachados ya están ocupados. Un turno ocupado no puede reservarse otra vez, aunque dos personas lo intenten al mismo tiempo.</div>
+</section>
+
+<section id="s-cit" hidden>
+  <div class="box"><label>Mostrar<select id="fEst" onchange="render()"><option value="">Todas</option><option value="act">Pendientes y confirmadas</option><option value="hist">Historial</option></select></label></div>
+  <div class="wrap"><table><thead><tr><th>Fecha y hora</th><th>Profesional</th><th>Paciente</th><th>Tipo</th><th>Estado</th><th>Recordatorios</th><th>Acciones</th></tr></thead><tbody id="citas"></tbody></table></div>
+  <div class="note" id="citasN"></div>
+</section>
+
+<section id="s-rec" hidden>
+  <div class="note">Si un recordatorio falla, se reintenta a los 5, 15 y 60 minutos. En el segundo fallo se cambia de canal (SMS o correo). Tras 4 intentos queda como fallido y recepción debe llamar. No se envía nada si la cita se canceló o ya empezó.</div>
+  <div class="box">
+    <label>Proveedor de mensajes (simulado)<select id="prov" onchange="S.prov=this.value;save()"><option value="OK">Funciona</option><option value="FALLA">Está caído</option><option value="INTER">Falla a veces</option></select></label>
+    <button onclick="enviarRecs()">Enviar los recordatorios que toquen</button>
+  </div>
+  <div class="wrap"><table><thead><tr><th>Cita</th><th>Canal</th><th>Programado</th><th>Estado</th><th>Intentos</th><th>Próximo intento</th><th>Último error</th></tr></thead><tbody id="recs"></tbody></table></div>
+  <h2>Pacientes a los que hay que llamar</h2><ul class="log" id="llamar"></ul>
+</section>
+
+<section id="s-pac" hidden>
+  <div class="note">Solo se guardan los datos necesarios para dar la cita y avisar al paciente. No se guardan diagnósticos, motivos clínicos ni historia clínica: esos viven en el sistema clínico. Usa datos ficticios en esta demo.</div>
+  <form onsubmit="addPac(event)">
+    <label>Nombre<input name="nombre" required maxlength="80"></label>
+    <label>Cédula<input name="doc" required pattern="[0-9]{10}" title="10 dígitos" style="width:120px"></label>
+    <label>Correo<input name="email" type="email" required></label>
+    <label>Teléfono<input name="tel" required pattern="[0-9]{9,10}" title="9 o 10 dígitos" style="width:120px"></label>
+    <label>Canal preferido<select name="canal"><option value="SMS">SMS</option><option value="EMAIL">Correo</option></select></label>
+    <label class="in"><input type="checkbox" name="consent" checked> Acepta recordatorios</label>
+    <button>Agregar paciente</button>
+  </form>
+  <div class="wrap"><table><thead><tr><th>Nombre</th><th>Cédula</th><th>Contacto</th><th>Canal</th><th>Recordatorios</th><th></th></tr></thead><tbody id="pacs"></tbody></table></div>
+</section>
+
+<section id="s-pro" hidden>
+  <form onsubmit="addProf(event)">
+    <label>Nombre<input name="nombre" required maxlength="60"></label>
+    <label>Especialidad<input name="esp" required maxlength="40"></label>
+    <label>Desde<input name="desde" type="time" value="09:00" required></label>
+    <label>Hasta<input name="hasta" type="time" value="13:00" required></label>
+    <label>Minutos por turno<input name="dur" type="number" min="10" max="120" step="5" value="30" style="width:90px" required></label>
+    <button>Agregar profesional</button>
+  </form>
+  <div class="wrap"><table style="min-width:520px"><thead><tr><th>Profesional</th><th>Especialidad</th><th>Horario (lun–vie)</th><th>Turno</th><th></th></tr></thead><tbody id="profs"></tbody></table></div>
+</section>
+
+<section id="s-aud" hidden>
+  <h2>Métricas</h2><div class="kpis" id="mets"></div>
+  <div class="row">
+    <button class="sec" onclick="exportar()">Exportar copia (JSON)</button>
+    <button class="sec" onclick="document.getElementById('imp').click()">Importar copia</button>
+    <input type="file" id="imp" accept=".json" hidden onchange="importar(this)">
+    <button class="sec" onclick="if(confirm('Se reemplazarán tus datos por los de ejemplo.')){iniciar('seed');commit()}">Restaurar datos de ejemplo</button>
+    <button class="sec" onclick="if(confirm('Se borrará todo.')){iniciar('vacio');commit()}">Empezar desde cero</button>
+  </div>
+  <div class="box"><label class="in"><input type="checkbox" id="prot" onchange="S.prot=this.checked;save()"> Protección contra doble reserva activa (apágala solo para ver el problema)</label></div>
+  <h2>Auditoría</h2><ul class="log" id="aud"></ul>
+</section>
+</main>
+<footer>La hora del sistema solo avanza con los botones, para poder probar recordatorios, ausencias y cancelaciones sin esperar. Tus datos se guardan en este navegador y no se comparten con otros dispositivos; usa «Exportar copia» para llevarlos. El tiempo para encontrar un turno se mide desde que abres la búsqueda hasta que reservas.</footer>
+
+<script>
+const KEY="citas_v1",$=id=>document.getElementById(id);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pad=n=>String(n).padStart(2,"0"),ymd=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()),ms=s=>new Date(s).getTime();
+const fecha=s=>new Date(typeof s==="number"?s:ms(s)).toLocaleString("es-EC",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+const ft=t=>t<1000?Math.round(t)+" ms":t<60000?(t/1000).toFixed(1)+" s":(t/60000).toFixed(1)+" min";
+const vacio=()=>({now:Date.now(),profs:[],pacs:[],citas:[],recs:[],aud:[],conf:0,prot:true,prov:"OK",tb:[],seq:1,rol:"RECEPCION",user:null});
+function seed(){const s=vacio(),dia=o=>{const d=new Date(s.now);d.setDate(d.getDate()+o);return ymd(d)};
+  s.profs=[{id:"m1",nombre:"Dra. Elena Ruiz",esp:"Medicina general",desde:"09:00",hasta:"13:00",dur:30},{id:"m2",nombre:"Dr. Marco Salas",esp:"Pediatría",desde:"14:00",hasta:"18:00",dur:30},{id:"m3",nombre:"Dra. Lucía Vera",esp:"Odontología",desde:"08:00",hasta:"12:00",dur:45}];
+  s.pacs=[["p1","Ana Paredes","1700000011","ana@correo.test","0990000011","EMAIL"],["p2","Luis Mora","1700000022","luis@correo.test","0990000022","SMS"],["p3","Rosa Vera","1700000033","rosa@correo.test","0990000033","SMS"],["p4","Carlos Ibarra","1700000044","carlos@correo.test","0990000044","EMAIL"]]
+   .map(a=>({id:a[0],nombre:a[1],doc:a[2],email:a[3],tel:a[4],canal:a[5],consent:true}));
+  [["m1","p1",-1,"09:00","ASISTIO"],["m1","p2",-1,"09:30","AUSENTE"],["m1","p3",1,"10:00","RESERVADA"],["m2","p4",1,"14:30","RESERVADA"]]
+   .forEach(a=>s.citas.push({id:s.seq++,prof:a[0],pac:a[1],inicio:dia(a[2])+"T"+a[3],tipo:"Control",estado:a[4],creada:s.now}));
+  return s}
+let S,sel=null,repro=null,msg="",t0=null,tabAct="bus";
+function cargar(){try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&d.citas&&d.profs&&d.pacs)return Object.assign(vacio(),d)}catch(e){}return null}
+function iniciar(m){S=m==="vacio"?vacio():seed();if(m!=="vacio")S.citas.forEach(c=>{if(c.estado==="RESERVADA")crearRecs(c)});sel=repro=null;msg="";ajustarRol()}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const commit=()=>{save();render()};
+const PR=id=>S.profs.find(p=>p.id===id),PA=id=>S.pacs.find(p=>p.id===id),CI=id=>S.citas.find(c=>c.id===id);
+const nP=id=>(PR(id)||{nombre:"(eliminado)"}).nombre;
+const inic=n=>n.split(" ").map(w=>w[0]+".").join(" ");
+const nA=id=>{const p=PA(id);return p?(S.rol==="ADMIN"?inic(p.nombre):p.nombre):"(eliminado)"};
+const activa=c=>c.estado==="RESERVADA"||c.estado==="CONFIRMADA";
+const ocupado=(pr,ini)=>S.citas.some(c=>c.prof===pr&&c.inicio===ini&&activa(c));
+const TABS={PACIENTE:["bus","cit"],PROFESIONAL:["cit"],RECEPCION:["bus","cit","rec","pac"],ADMIN:["cit","rec","pro","aud"]};
+const RN={PACIENTE:"Paciente",PROFESIONAL:"Profesional",RECEPCION:"Recepción",ADMIN:"Administrador"};
+function ajustarRol(){const l=S.rol==="PACIENTE"?S.pacs:S.rol==="PROFESIONAL"?S.profs:null;if(l){if(!l.some(x=>x.id===S.user))S.user=l[0]?l[0].id:null}else S.user=null}
+const quien=()=>RN[S.rol]+(S.rol==="PACIENTE"&&PA(S.user)?" "+PA(S.user).nombre:S.rol==="PROFESIONAL"&&PR(S.user)?" "+PR(S.user).nombre:"");
+const aud=(ev,det,cid)=>{S.aud.unshift({t:S.now,quien:quien(),ev,det,cid:cid||null});S.aud.length=Math.min(S.aud.length,400)};
+const iniBusq=()=>{if(!t0)t0=Date.now()};
+function medir(){if(t0){S.tb.push(Date.now()-t0);if(S.tb.length>200)S.tb.shift()}t0=null}
+
+function slotsDe(p,dias){const out=[],d0=new Date(S.now);d0.setHours(0,0,0,0);
+  const a=p.desde.split(":").map(Number),b=p.hasta.split(":").map(Number);
+  for(let i=0;i<dias;i++){const d=new Date(d0);d.setDate(d0.getDate()+i);const w=d.getDay();if(w===0||w===6)continue;
+    for(let t=a[0]*60+a[1];t+p.dur<=b[0]*60+b[1];t+=p.dur){const s=ymd(d)+"T"+pad(Math.floor(t/60))+":"+pad(t%60);if(ms(s)>S.now)out.push(s)}}
+  return out}
+
+function crearRecs(c){const pa=PA(c.pac);if(!pa)return;
+  if(!pa.consent){aud("SIN_RECORDATORIOS","el paciente no aceptó recordatorios",c.id);return}
+  const ini=ms(c.inicio);let inm=false;
+  [24,2].forEach(h=>{let p=ini-h*36e5;if(p<=S.now){if(inm)return;inm=true;p=S.now}
+    S.recs.push({id:S.seq++,cita:c.id,canal:pa.canal,prog:p,estado:"PENDIENTE",intentos:0,prox:p,err:""})})}
+const cancelRecs=id=>S.recs.forEach(r=>{if(r.cita===id&&r.estado==="PENDIENTE")r.estado="CANCELADO"});
+
+function intentar(prof,ini,pac,tipo){
+  if(ms(ini)<=S.now)return{ok:false,msg:"Ese horario ya pasó."};
+  if(S.prot){
+    if(ocupado(prof,ini)){S.conf++;aud("RESERVA_RECHAZADA","turno ya ocupado: "+nP(prof)+", "+fecha(ini));return{ok:false,msg:"Ese turno acaba de ser ocupado por otra persona."}}
+    if(S.citas.some(c=>c.pac===pac&&c.inicio===ini&&activa(c))){S.conf++;aud("RESERVA_RECHAZADA","el paciente ya tiene otra cita a esa hora");return{ok:false,msg:"El paciente ya tiene otra cita a esa hora."}}}
+  const c={id:S.seq++,prof,pac,inicio:ini,tipo,estado:"RESERVADA",creada:S.now};S.citas.push(c);
+  aud("CITA_CREADA",nP(prof)+", "+fecha(ini)+", "+tipo,c.id);crearRecs(c);return{ok:true,msg:"Cita reservada con "+nP(prof)+": "+fecha(ini),cita:c}}
+
+function elegir(prof,ini){iniBusq();sel={prof,inicio:ini};msg="";render()}
+function primero(){iniBusq();const fe=$("fEsp").value,fp=$("fProf").value,dias=Number($("fDias").value)||7;let best=null;
+  S.profs.filter(p=>(!fe||p.esp===fe)&&(!fp||p.id===fp)).forEach(p=>slotsDe(p,dias).forEach(s=>{if(!ocupado(p.id,s)&&(!best||ms(s)<ms(best.inicio)))best={prof:p.id,inicio:s}}));
+  if(!best){msg="No hay turnos libres con esos filtros.";sel=null}else{sel=best;msg=""}render()}
+function reservarUI(){if(!sel)return;const pac=S.rol==="PACIENTE"?S.user:$("pacSel").value;if(!pac)return alert("Elige un paciente.");
+  if(repro){const c=CI(repro),o=nP(c.prof)+", "+fecha(c.inicio);
+    if(S.prot&&ocupado(sel.prof,sel.inicio)){S.conf++;aud("RESERVA_RECHAZADA","turno ya ocupado al reprogramar",c.id);msg="Ese turno acaba de ser ocupado por otra persona."}
+    else{c.prof=sel.prof;c.inicio=sel.inicio;c.estado="RESERVADA";cancelRecs(c.id);crearRecs(c);aud("CITA_REPROGRAMADA",o+" → "+nP(c.prof)+", "+fecha(c.inicio),c.id);medir();msg="Cita reprogramada: "+fecha(c.inicio);repro=null;sel=null}}
+  else{const r=intentar(sel.prof,sel.inicio,pac,$("tipo").value);msg=r.msg;if(r.ok){medir();sel=null}}
+  commit()}
+function simular2(){if(!sel||repro)return;if(S.pacs.length<2)return alert("Necesitas al menos dos pacientes.");
+  const a=S.rol==="PACIENTE"?S.user:$("pacSel").value,b=S.pacs.find(p=>p.id!==a).id,t=$("tipo").value;
+  const r1=intentar(sel.prof,sel.inicio,a,t),r2=intentar(sel.prof,sel.inicio,b,t);
+  msg="Persona A: "+(r1.ok?"reservó el turno.":r1.msg)+" · Persona B: "+(r2.ok?"también lo reservó (doble reserva).":"rechazada. "+r2.msg);
+  if(r1.ok||r2.ok)medir();sel=null;commit()}
+
+function puede(a,c){const r=S.rol,act=activa(c),pas=ms(c.inicio)<=S.now,mia=r==="PACIENTE"&&c.pac===S.user;
+  if(a==="cancelar"||a==="repro")return act&&!pas&&(r==="RECEPCION"||mia);
+  if(a==="confirmar")return c.estado==="RESERVADA"&&!pas&&(r==="RECEPCION"||mia);
+  return act&&pas&&(r==="RECEPCION"||(r==="PROFESIONAL"&&c.prof===S.user))}
+function accion(id,a){const c=CI(id);if(!c||!puede(a==="asistio"||a==="ausente"?"asistencia":a,c))return alert("No tienes permiso para esta acción.");
+  if(a==="cancelar"){let m="Cancelada por el paciente";
+    if(S.rol==="PACIENTE"){if(ms(c.inicio)-S.now<2*36e5)return alert("Con menos de 2 horas de anticipación, llama a recepción para cancelar.")}
+    else{m=prompt("Motivo de la cancelación (sin datos clínicos):","Solicitud del paciente");if(m===null)return;m=m.trim()||"Sin motivo"}
+    c.estado="CANCELADA";c.motivo=m;cancelRecs(c.id);aud("CITA_CANCELADA",m,c.id)}
+  else if(a==="confirmar"){c.estado="CONFIRMADA";aud("CITA_CONFIRMADA","",c.id)}
+  else if(a==="repro"){repro=id;sel=null;msg="";return tab("bus")}
+  else{c.estado=a==="asistio"?"ASISTIO":"AUSENTE";aud(a==="asistio"?"ASISTENCIA_REGISTRADA":"AUSENCIA_REGISTRADA","",c.id)}
+  commit()}
+
+function enviarRecs(){const deb=S.recs.filter(r=>r.estado==="PENDIENTE"&&r.prox<=S.now);
+  if(!deb.length)return alert("No hay recordatorios para enviar ahora. Avanza la hora del sistema o espera el próximo intento.");
+  deb.forEach(r=>{const c=CI(r.cita);
+    if(!c||!PA(c.pac)||!activa(c)||ms(c.inicio)<=S.now){r.estado="CANCELADO";r.err="La cita ya no aplica";return}
+    r.intentos++;const ok=S.prov==="OK"||(S.prov==="INTER"&&Math.random()<.5);
+    if(ok){r.estado="ENTREGADO";r.err="";aud("RECORDATORIO_ENTREGADO",r.canal+", intento "+r.intentos+": el proveedor confirmó la entrega",c.id)}
+    else{r.err="El proveedor no respondió";
+      if(r.intentos>=4){r.estado="FALLIDO";aud("RECORDATORIO_FALLIDO","4 intentos sin éxito: recepción debe llamar al paciente",c.id)}
+      else{const w=[5,15,60][r.intentos-1];r.prox=S.now+w*6e4;aud("RECORDATORIO_REINTENTO",r.canal+" falló (intento "+r.intentos+"); próximo intento en "+w+" min",c.id);
+        if(r.intentos===2){r.canal=r.canal==="SMS"?"EMAIL":"SMS";aud("CAMBIO_DE_CANAL","se prueba por "+r.canal,c.id)}}}});
+  commit()}
+function avanzar(m){S.now+=m*6e4;commit()}
+
+const fd=e=>{e.preventDefault();return Object.fromEntries(new FormData(e.target))};
+function addPac(e){const f=fd(e);if(S.pacs.some(p=>p.doc===f.doc))return alert("Ya existe un paciente con esa cédula.");
+  S.pacs.push({id:"p"+Date.now().toString(36),nombre:f.nombre.trim(),doc:f.doc,email:f.email,tel:f.tel,canal:f.canal,consent:!!f.consent});aud("PACIENTE_CREADO",f.nombre.trim());e.target.reset();commit()}
+function quitarPac(id){if(S.citas.some(c=>c.pac===id))return alert("Tiene citas registradas; no se puede quitar para conservar el historial.");if(confirm("¿Quitar paciente?")){S.pacs=S.pacs.filter(p=>p.id!==id);aud("PACIENTE_ELIMINADO","");commit()}}
+function setConsent(id,v){PA(id).consent=v;aud("CONSENTIMIENTO_CAMBIADO","recordatorios: "+(v?"acepta":"no acepta"));commit()}
+function addProf(e){const f=fd(e),d=Number(f.dur);if(!(d>=10)||f.desde>=f.hasta)return alert("Revisa el horario: «Desde» debe ser antes de «Hasta».");
+  S.profs.push({id:"m"+Date.now().toString(36),nombre:f.nombre.trim(),esp:f.esp.trim(),desde:f.desde,hasta:f.hasta,dur:d});aud("PROFESIONAL_CREADO",f.nombre.trim());e.target.reset();commit()}
+function quitarProf(id){if(S.citas.some(c=>c.prof===id))return alert("Tiene citas registradas; no se puede quitar para conservar el historial.");if(confirm("¿Quitar profesional?")){S.profs=S.profs.filter(p=>p.id!==id);aud("PROFESIONAL_ELIMINADO","");ajustarRol();commit()}}
+function cambiarRol(v){S.rol=v;ajustarRol();sel=repro=null;msg="";tab(TABS[v][0])}
+function exportar(){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,1)],{type:"application/json"}));a.download="citas-copia.json";a.click()}
+function importar(i){const f=i.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.citas||!d.profs||!d.pacs)throw 0;S=Object.assign(vacio(),d);ajustarRol();commit()}catch(e){alert("El archivo no es una copia válida.")}i.value=""};r.readAsText(f)}
+
+function met(){const g={};S.citas.forEach(c=>{if(activa(c)||c.estado==="ASISTIO"||c.estado==="AUSENTE"){const k=c.prof+"|"+c.inicio;g[k]=(g[k]||0)+1}});
+  const as=S.citas.filter(c=>c.estado==="ASISTIO").length,au=S.citas.filter(c=>c.estado==="AUSENTE").length;
+  const rs=S.recs.filter(r=>r.estado!=="CANCELADO"),en=rs.filter(r=>r.estado==="ENTREGADO").length;
+  return{dup:Object.values(g).reduce((a,n)=>a+(n>1?n-1:0),0),as,au,aus:as+au?Math.round(au/(as+au)*100)+"%":"–",
+    tb:S.tb.length?ft(S.tb.reduce((a,b)=>a+b,0)/S.tb.length):"–",en,rs:rs.length,ent:rs.length?Math.round(en/rs.length*100)+"%":"–"}}
+const tag=s=>`<span class="tag ${s}">${s.replace("_"," ")}</span>`;
+const none=(n,t)=>`<tr><td colspan="${n}" class="empty">${t}</td></tr>`;
+function opts(id,h){const e=$(id),v=e.value;e.innerHTML=h;if(v&&Array.from(e.options||[]).some(o=>o.value===v))e.value=v}
+
+function render(){
+  const ok=TABS[S.rol];if(!ok.includes(tabAct))tabAct=ok[0];
+  ["bus","cit","rec","pac","pro","aud"].forEach(x=>{const a=ok.includes(x);$("t-"+x).hidden=!a;$("s-"+x).hidden=!(a&&tabAct===x);$("t-"+x).setAttribute("aria-selected",tabAct===x);$("t-"+x).className=tabAct===x?"":"sec"});
+  $("rol").value=S.rol;$("reloj").textContent=fecha(S.now);$("prov").value=S.prov;$("prot").checked=S.prot;
+  const lu=S.rol==="PACIENTE"?S.pacs:S.rol==="PROFESIONAL"?S.profs:null;$("usrL").hidden=!lu;
+  if(lu){opts("usr",lu.map(x=>`<option value="${x.id}">${esc(x.nombre)}</option>`).join(""));$("usr").value=S.user||""}
+  const m=met(),show=S.rol==="RECEPCION"||S.rol==="ADMIN";$("kp").hidden=!show;
+  const K=[[m.dup,"Citas duplicadas ("+S.conf+" intentos bloqueados)"],[m.aus,"Ausencias ("+m.au+" de "+(m.as+m.au)+" citas pasadas)"],[m.tb,"Tiempo medio para encontrar un turno"],[m.ent,"Recordatorios entregados ("+m.en+" de "+m.rs+")"]];
+  $("kp").innerHTML=K.map(k=>`<div class="kpi"><b>${k[0]}</b><span>${k[1]}</span></div>`).join("");$("mets").innerHTML=$("kp").innerHTML;
+  // buscar
+  const esps=[...new Set(S.profs.map(p=>p.esp))];opts("fEsp",'<option value="">Todas</option>'+esps.map(e=>`<option>${esc(e)}</option>`).join(""));
+  const fe=$("fEsp").value;opts("fProf",'<option value="">Cualquiera</option>'+S.profs.filter(p=>!fe||p.esp===fe).map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join(""));
+  const fp=$("fProf").value,dias=Number($("fDias").value)||7;
+  const rb=$("repro");rb.hidden=!repro;if(repro){const c=CI(repro);rb.innerHTML=`Reprogramando la cita de ${esc(nA(c.pac))} (${esc(fecha(c.inicio))}). Elige un turno nuevo. <button class="sec sm" onclick="repro=null;sel=null;render()">Cancelar reprogramación</button>`}
+  $("msg").hidden=!msg;$("msg").textContent=msg;
+  const pl=S.profs.filter(p=>(!fe||p.esp===fe)&&(!fp||p.id===fp));
+  $("slots").innerHTML=pl.length?pl.map(p=>{const g={};slotsDe(p,dias).forEach(s=>(g[s.slice(0,10)]=g[s.slice(0,10)]||[]).push(s));
+    return`<h3>${esc(p.nombre)} <small>${esc(p.esp)} · turnos de ${p.dur} min</small></h3>`+(Object.keys(g).length?Object.keys(g).map(d=>`<div class="dia"><b>${new Date(d+"T00:00").toLocaleDateString("es-EC",{weekday:"short",day:"numeric",month:"short"})}</b>${g[d].map(s=>`<button class="slot${sel&&sel.prof===p.id&&sel.inicio===s?" on":""}" ${ocupado(p.id,s)?"disabled":""} onclick="elegir('${p.id}','${s}')">${s.slice(11)}</button>`).join("")}</div>`).join(""):'<div class="empty">Sin turnos en este rango.</div>')}).join(""):'<div class="empty">No hay profesionales con esos filtros.</div>';
+  $("rv").hidden=!sel;
+  if(sel){$("rvT").textContent="Turno elegido: "+nP(sel.prof)+", "+fecha(sel.inicio);$("pacL").hidden=S.rol==="PACIENTE";opts("pacSel",S.pacs.map(p=>`<option value="${p.id}">${esc(p.nombre)}</option>`).join(""));
+    $("btnRes").textContent=repro?"Mover la cita a este turno":"Reservar";$("btnSim").hidden=!!repro}
+  // citas
+  const f=$("fEst").value;
+  const vis=S.citas.filter(c=>(S.rol==="PACIENTE"?c.pac===S.user:S.rol==="PROFESIONAL"?c.prof===S.user:true)&&(!f||(f==="act")===activa(c))).sort((a,b)=>ms(a.inicio)-ms(b.inicio));
+  const B=(a,c,t,s)=>puede(a,c)?`<button class="sm ${s||""}" onclick="accion(${c.id},'${a}')">${t}</button>`:"";
+  $("citas").innerHTML=vis.length?vis.map(c=>{const rs=S.recs.filter(r=>r.cita===c.id&&r.estado!=="CANCELADO"),en=rs.filter(r=>r.estado==="ENTREGADO").length;
+    const ac=B("confirmar",c,"Confirmar","sec")+B("repro",c,"Reprogramar","sec")+B("cancelar",c,"Cancelar","sec")
+      +(puede("asistencia",c)?`<button class="sm" onclick="accion(${c.id},'asistio')">Asistió</button><button class="sm sec" onclick="accion(${c.id},'ausente')">Ausente</button>`:"");
+    return`<tr><td>${esc(fecha(c.inicio))}</td><td>${esc(nP(c.prof))}</td><td>${esc(nA(c.pac))}</td><td>${esc(c.tipo)}</td><td>${tag(c.estado)}${c.motivo?`<small style="display:block;color:var(--mute)">${esc(c.motivo)}</small>`:""}</td><td>${rs.length?en+" de "+rs.length+" entregados":"–"}</td><td>${ac||"–"}</td></tr>`}).join(""):none(7,"No hay citas para mostrar.");
+  $("citasN").textContent=S.rol==="PACIENTE"?"Solo ves tus citas. Puedes cancelar hasta 2 horas antes.":S.rol==="PROFESIONAL"?"Solo ves tu agenda. Puedes registrar asistencia cuando la cita ya empezó.":S.rol==="ADMIN"?"El administrador ve la agenda sin nombres completos de pacientes y no puede modificar citas.":"Recepción puede reservar, reprogramar, cancelar y registrar asistencia.";
+  // recordatorios
+  $("recs").innerHTML=S.recs.length?[...S.recs].sort((a,b)=>b.prog-a.prog).map(r=>{const c=CI(r.cita);return`<tr><td>${c?esc(fecha(c.inicio))+" · "+esc(nP(c.prof))+" · "+esc(nA(c.pac)):"–"}</td><td>${r.canal}</td><td>${esc(fecha(r.prog))}</td><td>${tag(r.estado)}</td><td>${r.intentos}</td><td>${r.estado==="PENDIENTE"?esc(fecha(r.prox))+(r.prox<=S.now?" (toca ahora)":""):"–"}</td><td>${esc(r.err||"–")}</td></tr>`}).join(""):none(7,"No hay recordatorios programados.");
+  const fl=S.recs.filter(r=>r.estado==="FALLIDO");
+  $("llamar").innerHTML=fl.length?fl.map(r=>{const c=CI(r.cita),p=c&&PA(c.pac);return`<li>${esc(nA(c.pac))}: cita del ${esc(fecha(c.inicio))}${S.rol==="RECEPCION"&&p?" · teléfono "+esc(p.tel):""}</li>`}).join(""):"<li>Ninguno por ahora.</li>";
+  // pacientes y profesionales
+  $("pacs").innerHTML=S.pacs.length?S.pacs.map(p=>`<tr><td>${esc(p.nombre)}</td><td>******${esc(p.doc.slice(-4))}</td><td>${esc(p.email)}<br>${esc(p.tel)}</td><td>${p.canal==="SMS"?"SMS":"Correo"}</td><td><input type="checkbox" ${p.consent?"checked":""} onchange="setConsent('${p.id}',this.checked)" aria-label="Acepta recordatorios"></td><td><button class="sec sm" onclick="quitarPac('${p.id}')">Quitar</button></td></tr>`).join(""):none(6,"Sin pacientes.");
+  $("profs").innerHTML=S.profs.length?S.profs.map(p=>`<tr><td>${esc(p.nombre)}</td><td>${esc(p.esp)}</td><td>${p.desde} a ${p.hasta}</td><td>${p.dur} min</td><td><button class="sec sm" onclick="quitarProf('${p.id}')">Quitar</button></td></tr>`).join(""):none(5,"Sin profesionales.");
+  $("aud").innerHTML=S.aud.length?S.aud.map(a=>`<li><small>${esc(fecha(a.t))} · ${esc(a.quien)}${a.cid?" · cita n.º "+a.cid:""}</small><b>${esc(a.ev)}</b>${a.det?" — "+esc(a.det):""}</li>`).join(""):"<li>Sin registros todavía.</li>"}
+function tab(t){const ok=TABS[S.rol];if(!ok.includes(t))t=ok[0];tabAct=t;
+  if(t==="bus")iniBusq();if(t==="pac")aud("CONSULTA_PACIENTES","se abrió el listado de pacientes");commit()}
+S=cargar();if(!S)iniciar("seed");tab(TABS[S.rol][0]);
+</script>
+</body>
+</html>

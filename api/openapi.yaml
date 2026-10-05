@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: API de citas médicas
+  version: 0.1.0
+  description: Disponibilidad, reservas, cancelaciones y recordatorios. La base de datos impide dos citas activas en el mismo horario.
+paths:
+  /api/v1/disponibilidad:
+    get:
+      summary: Buscar turnos libres
+      parameters:
+        - { name: especialidad, in: query, schema: { type: string } }
+        - { name: profesionalId, in: query, schema: { type: integer, format: int64 } }
+        - { name: desde, in: query, schema: { type: string, format: date } }
+        - { name: dias, in: query, schema: { type: integer, default: 7, maximum: 30 } }
+      responses:
+        '200':
+          description: Turnos libres. La lista es informativa; la reserva vuelve a validar.
+          content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Turno' } } } }
+  /api/v1/citas:
+    post:
+      summary: Reservar una cita
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CitaSolicitud' } } }
+      responses:
+        '201': { description: Cita reservada, content: { application/json: { schema: { $ref: '#/components/schemas/Cita' } } } }
+        '409': { description: El turno ya fue ocupado. Incluye los próximos turnos libres del profesional. }
+        '403': { description: El rol no puede reservar para ese paciente }
+    get:
+      summary: Listar citas visibles para el usuario (propias, de su agenda o todas, según el rol)
+      parameters:
+        - { name: estado, in: query, schema: { type: string } }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/Cita' } } } } }
+  /api/v1/citas/{id}/cancelar:
+    post:
+      summary: Cancelar una cita
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { motivo: { type: string, maxLength: 100 } } } } }
+      responses:
+        '200': { description: Cancelada }
+        '403': { description: El paciente solo puede cancelar sus citas con la anticipación mínima }
+        '409': { description: La cita cambió mientras se editaba (versión desactualizada) }
+  /api/v1/citas/{id}/reprogramar:
+    post:
+      summary: Mover la cita a otro turno
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [profesionalId, inicio], properties: { profesionalId: { type: integer }, inicio: { type: string, format: date-time } } } } }
+      responses:
+        '200': { description: Reprogramada }
+        '409': { description: El nuevo turno ya está ocupado }
+  /api/v1/citas/{id}/asistencia:
+    post:
+      summary: Registrar si el paciente asistió o no (profesional o recepción)
+      parameters: [ { name: id, in: path, required: true, schema: { type: integer, format: int64 } } ]
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [resultado], properties: { resultado: { type: string, enum: [ASISTIO, AUSENTE] } } } } }
+      responses:
+        '200': { description: Registrada }
+  /api/v1/webhooks/mensajeria:
+    post:
+      summary: Aviso del proveedor de SMS o correo sobre el estado de entrega de un recordatorio
+      responses:
+        '204': { description: Recibido }
+components:
+  schemas:
+    Turno:
+      type: object
+      properties:
+        profesionalId: { type: integer }
+        profesional: { type: string }
+        inicio: { type: string, format: date-time }
+        fin: { type: string, format: date-time }
+    CitaSolicitud:
+      type: object
+      required: [profesionalId, inicio, tipoConsulta]
+      properties:
+        profesionalId: { type: integer }
+        pacienteId: { type: integer, description: Solo recepción; el paciente reserva siempre para sí mismo. }
+        inicio: { type: string, format: date-time }
+        tipoConsulta: { type: string, enum: [PRIMERA_CONSULTA, CONTROL, PROCEDIMIENTO_MENOR] }
+    Cita:
+      type: object
+      properties:
+        id: { type: integer }
+        profesional: { type: string }
+        inicio: { type: string, format: date-time }
+        estado: { type: string, enum: [RESERVADA, CONFIRMADA, CANCELADA, ASISTIO, AUSENTE] }
+        version: { type: integer }

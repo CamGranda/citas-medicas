@@ -1,0 +1,20 @@
+spring:
+  jpa:
+    hibernate.ddl-auto: validate   # el esquema lo controla db/init.sql
+    open-in-view: false
+    properties.hibernate.jdbc.time_zone: UTC
+management:
+  endpoints.web.exposure.include: health,info,prometheus
+clinica:
+  zona-horaria: ${CLINICA_ZONA_HORARIA:America/Guayaquil}
+cancelacion:
+  min-horas: ${CANCELACION_MIN_HORAS:2}
+recordatorio:
+  horas: ${RECORDATORIO_HORAS:24,2}
+  esperas-min: ${RECORDATORIO_ESPERAS_MIN:5,15,60}
+  max-intentos: ${RECORDATORIO_MAX_INTENTOS:4}
+  cron: ${RECORDATORIO_CRON:0 * * * * *}
+mensajeria:
+  remitente: ${MAIL_REMITENTE:citas@clinica.test}
+  sms-url: ${SMS_API_URL:http://localhost:9100}
+  sms-key: ${SMS_API_KEY:}
